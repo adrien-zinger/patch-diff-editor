@@ -1,0 +1,11 @@
+[package]
+name = "difftool"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+colored = "3.0.0"
+similar = "2.7.0"
+syntect = "5.3.0"
+tempfile = "3.23.0"
+walkdir = "2.5.0"
