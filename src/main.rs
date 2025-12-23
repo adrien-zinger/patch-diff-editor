@@ -362,10 +362,8 @@ fn build_hunks(a: &str, b: &str, context: usize) -> Vec<Hunk> {
         line: change.as_str().unwrap().into(),
         tag: change.tag(),
     }) {
-        if line.old_index.is_none() {
-			if line.tag == ChangeTag::Equal {
-            	panic!("{} has none index", line.line);
-			}
+        if line.old_index.is_none() && line.tag == ChangeTag::Equal {
+            panic!("Invalid change detected {line:#?}");
         }
 
         current.push(line.clone());
