@@ -153,13 +153,27 @@ fn patch_dirs(left: &Path, right: &Path) -> io::Result<()> {
     // Files only in right → add
     for rel_path in right_files.keys().filter(|p| !left_files.contains_key(*p)) {
         let right_file = &right_files[rel_path];
-        let dest = fs::read_to_string(right_file)?;
-        let dest = patch_file(right_file, "", &dest)?;
 
-        let mut right_file = File::create(right_file)?;
-        right_file.write_all(dest.as_bytes())?;
+        println!("\n@@ add {}", right_file.to_str().unwrap());
+        print!("\n@@:> ");
+        io::stdout().flush()?;
 
-        //fs::remove_file()?
+        let mut input = String::new();
+        io::stdin().read_line(&mut input)?;
+
+        match input.trim() {
+            "y" | "" => {}
+            "n" => {
+                fs::remove_file(right_file)?;
+            }
+            "e" => {
+                let dest = fs::read_to_string(right_file)?;
+                let dest = patch_file(right_file, "", &dest)?;
+                let mut right_file = File::create(right_file)?;
+                right_file.write_all(dest.as_bytes())?;
+            }
+            _ => println!("Unknown command"),
+        }
     }
 
     Ok(())
@@ -308,7 +322,6 @@ fn apply(original: &str, hunks: Vec<Hunk>) -> String {
                 ret.push_str(&format!("{}\n", original_lines[index]));
                 index += 1;
             }
-
         }
 
         for diff in hunk.diffs {
