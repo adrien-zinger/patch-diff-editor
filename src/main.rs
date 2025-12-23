@@ -41,19 +41,19 @@ impl Hunk {
             .extension()
             .and_then(|e| e.to_str())
             .and_then(|e| ps.find_syntax_by_extension(e))
-            .map(|s| HighlightLines::new(s, &ts.themes["base16-ocean.dark"]));
+            .map(|s| HighlightLines::new(s, &ts.themes["base16-mocha.dark"]));
 
         let (old_index, new_index) = self.starting_indexes();
 
         if let Some(file_str) = file.to_str() {
-            println!("@@ {file_str}");
+            println!("{}{}", "@@ ".blue(), file_str.blue());
         }
 
         if let Some(old_index) = old_index {
-            print!("@@ {old_index}");
+            print!("{}{}", "@@".blue(), old_index.to_string().blue());
         }
         if let Some(new_index) = new_index {
-            println!(",{new_index}");
+            println!("{}{}", ",".blue(), new_index.to_string().blue());
         } else {
             println!();
         }
