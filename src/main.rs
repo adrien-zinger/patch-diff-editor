@@ -127,8 +127,7 @@ fn patch_dirs(left: &Path, right: &Path) -> io::Result<()> {
         let left_file = &left_files[rel_path];
         let original = fs::read_to_string(left_file)?;
 
-        println!("\n@@ delete {}", left_file.to_str().unwrap());
-        print!("\n@@:> ");
+        print!("\n@@ delete {}\n@@:> ", left_file.to_str().unwrap());
         io::stdout().flush()?;
 
         let mut input = String::new();
@@ -154,8 +153,7 @@ fn patch_dirs(left: &Path, right: &Path) -> io::Result<()> {
     for rel_path in right_files.keys().filter(|p| !left_files.contains_key(*p)) {
         let right_file = &right_files[rel_path];
 
-        println!("\n@@ add {}", right_file.to_str().unwrap());
-        print!("\n@@:> ");
+        print!("\n@@ add {}\n@@:> ", right_file.to_str().unwrap());
         io::stdout().flush()?;
 
         let mut input = String::new();
@@ -249,7 +247,7 @@ fn edit_hunk(original: &str, hunk: &Hunk) -> io::Result<Option<Hunk>> {
         let mut edited = String::new();
         tmp.reopen()?.read_to_string(&mut edited)?;
 
-        match check_patch(original, old_index.unwrap(), &edited) {
+        match check_patch(original, old_index.unwrap_or_default(), &edited) {
             Ok(new_hunk) => return Ok(Some(new_hunk)),
             Err(e) => {
                 eprintln!("\nPatch does not apply:\n{e}\nPress Enter to re-edit…");
