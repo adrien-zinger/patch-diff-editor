@@ -1,22 +1,22 @@
-use similar::{ChangeTag, TextDiff};
-use tempfile::NamedTempFile;
 use colored::Colorize;
+use similar::{ChangeTag, TextDiff};
+use std::collections::HashMap;
 use std::env;
 use std::fs::{self, File};
 use std::io::{self, Read, Write};
-use std::process::Command;
-use walkdir::WalkDir;
-use std::collections::HashMap;
 use std::path::{Path, PathBuf};
+use std::process::Command;
 use syntect::easy::HighlightLines;
+use syntect::highlighting::{Style, ThemeSet};
 use syntect::parsing::SyntaxSet;
-use syntect::highlighting::{ThemeSet, Style};
-use syntect::util::{as_24_bit_terminal_escaped, LinesWithEndings};
+use syntect::util::{LinesWithEndings, as_24_bit_terminal_escaped};
+use tempfile::NamedTempFile;
+use walkdir::WalkDir;
 
 #[derive(Debug, Clone)]
 struct Hunk {
     diffs: Vec<Diff>,
-	apply: bool
+    apply: bool,
 }
 
 #[derive(Debug, Clone)]
@@ -55,13 +55,17 @@ impl Hunk {
         for diff in &self.diffs {
             match diff.tag {
                 ChangeTag::Equal => {
-					for line in LinesWithEndings::from(&diff.line) {
-					    let ranges: Vec<(Style, &str)> = h.highlight_line(line, &ps).unwrap();
-					    let escaped = as_24_bit_terminal_escaped(&ranges[..], true);
-					    print!(" {escaped}");
-						print!("\x1b[0m");
-					}
-				}
+                    if let Some(h) = &mut h {
+                        for line in LinesWithEndings::from(&diff.line) {
+                            let ranges: Vec<(Style, &str)> = h.highlight_line(line, &ps).unwrap();
+                            let escaped = as_24_bit_terminal_escaped(&ranges[..], true);
+                            print!(" {escaped}");
+                            print!("\x1b[0m");
+                        }
+                    } else {
+                        print!(" {}", diff.line);
+                    }
+                }
                 ChangeTag::Insert => print!("{}{}", "+".green(), diff.line.green()),
                 ChangeTag::Delete => print!("{}{}", "-".red(), diff.line.red()),
             }
@@ -126,16 +130,16 @@ fn patch_dirs(left: &Path, right: &Path) -> io::Result<()> {
         match input.trim() {
             "y" | "" => {}
             "n" => {
-        		let mut right_file = File::create(right.join(rel_path))?;
-		        right_file.write_all(original.as_bytes())?;
-			}
-			"e" => {
-        		let dest = patch_file(left_file, &original, "")?;
-        		if !dest.is_empty() {
-        		    let mut right_file = File::create(right.join(rel_path))?;
-        		    right_file.write_all(dest.as_bytes())?;
-        		}
-			}
+                let mut right_file = File::create(right.join(rel_path))?;
+                right_file.write_all(original.as_bytes())?;
+            }
+            "e" => {
+                let dest = patch_file(left_file, &original, "")?;
+                if !dest.is_empty() {
+                    let mut right_file = File::create(right.join(rel_path))?;
+                    right_file.write_all(dest.as_bytes())?;
+                }
+            }
             _ => println!("Unknown command"),
         }
     }
@@ -149,7 +153,7 @@ fn patch_dirs(left: &Path, right: &Path) -> io::Result<()> {
         let mut right_file = File::create(right_file)?;
         right_file.write_all(dest.as_bytes())?;
 
-		//fs::remove_file()?
+        //fs::remove_file()?
     }
 
     Ok(())
@@ -177,13 +181,13 @@ fn patch_file(path: &Path, original: &str, dest: &str) -> io::Result<String> {
         io::stdin().read_line(&mut input)?;
         match input.trim() {
             "y" | "" => {
-				hunks[i].apply = true;
-				i += 1;
-			}
+                hunks[i].apply = true;
+                i += 1;
+            }
             "n" => {
-				i += 1;
-				hunks[i].apply = false;
-			}
+                hunks[i].apply = false;
+                i += 1;
+            }
             "e" => {
                 hunks[i] = edit_hunk(original, &hunks[i]).unwrap().unwrap();
             }
@@ -257,7 +261,10 @@ fn check_patch(original: &str, start: usize, new_patch: &str) -> Result<Hunk, St
         .collect::<Result<Vec<Diff>, String>>()?;
 
     apply_check(original, start, &diffs)?;
-    Ok(Hunk { diffs, apply: false })
+    Ok(Hunk {
+        diffs,
+        apply: false,
+    })
 }
 
 fn apply_check(original: &str, old_index: usize, patch: &[Diff]) -> Result<(), String> {
@@ -290,44 +297,34 @@ fn apply(original: &str, hunks: Vec<Hunk>) -> String {
     let mut index = 0;
 
     for hunk in hunks.into_iter().filter(|h| h.apply) {
-		if let Some(old_index) = hunk.starting_indexes().0 {
-			if old_index > 0 {
-        	    while index < old_index - 1 {
-        	        ret.push_str(original_lines[index]);
-        	        index += 1;
-        	    }
-        	}
+        if let Some(old_index) = hunk.starting_indexes().0 {
+            while index < old_index {
+                ret.push_str(&format!("{}\n", original_lines[index]));
+                index += 1;
+            }
 
-        	for diff in hunk.diffs {
-        	    match diff.tag {
-        	        ChangeTag::Equal => {
-        	            ret.push_str(&diff.line);
-        	            index += 1;
-        	        }
-        	        ChangeTag::Insert => {
-        	            ret.push_str(&diff.line);
-        	        }
-        	        ChangeTag::Delete => {
-        	            index += 1;
-        	        }
-        	    }
-        	}
-		} else {
-			for diff in hunk.diffs {
-        	    match diff.tag {
-        	        ChangeTag::Insert => {
-        	            ret.push_str(&diff.line);
-        	        }
-        	        _ => unreachable!()
-        	    }
-        	}
-		}
+        }
+
+        for diff in hunk.diffs {
+            match diff.tag {
+                ChangeTag::Equal => {
+                    ret.push_str(&diff.line);
+                    index += 1;
+                }
+                ChangeTag::Insert => {
+                    ret.push_str(&diff.line);
+                }
+                ChangeTag::Delete => {
+                    index += 1;
+                }
+            }
+        }
     }
 
-	while index < original_lines.len() {
+    while index < original_lines.len() {
         ret.push_str(&format!("{}\n", original_lines[index]));
         index += 1;
-	}
+    }
 
     ret
 }
@@ -342,10 +339,16 @@ fn build_hunks(a: &str, b: &str, context: usize) -> Vec<Hunk> {
 
     for line in diff.iter_all_changes().map(|change| Diff {
         old_index: change.old_index(),
-        new_index: change.old_index(),
+        new_index: change.new_index(),
         line: change.as_str().unwrap().into(),
         tag: change.tag(),
     }) {
+        if line.old_index.is_none() {
+			if line.tag == ChangeTag::Equal {
+            	panic!("{} has none index", line.line);
+			}
+        }
+
         current.push(line.clone());
         match line.tag {
             ChangeTag::Equal => {
@@ -365,11 +368,8 @@ fn build_hunks(a: &str, b: &str, context: usize) -> Vec<Hunk> {
         }
     }
 
-    if !current.is_empty() {
-        hunks.push(Hunk {
-			diffs: current,
-			apply: false
-		});
+    if !current.is_empty() && in_diff {
+        hunks.push(trim(std::mem::take(&mut current), context));
     }
 
     hunks
@@ -395,7 +395,7 @@ fn trim(lines: Vec<Diff>, context: usize) -> Hunk {
 
     Hunk {
         diffs: lines[first..last].to_vec(),
-		apply: false,
+        apply: false,
     }
 }
 
@@ -411,7 +411,7 @@ fn split_hunk(hunk: &Hunk) -> Vec<Hunk> {
                 if in_diff {
                     hunks.push(Hunk {
                         diffs: std::mem::take(&mut current),
-						apply: false
+                        apply: false,
                     });
                     in_diff = false;
                 }
@@ -423,7 +423,10 @@ fn split_hunk(hunk: &Hunk) -> Vec<Hunk> {
     }
 
     if in_diff {
-        hunks.push(Hunk { diffs: current, apply: false });
+        hunks.push(Hunk {
+            diffs: current,
+            apply: false,
+        });
     }
 
     hunks
