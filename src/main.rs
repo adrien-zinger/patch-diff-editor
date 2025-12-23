@@ -34,14 +34,20 @@ impl Hunk {
     }
 
     fn print(&self, file: &Path) {
-		let ps = SyntaxSet::load_defaults_newlines();
-		let ts = ThemeSet::load_defaults();
-		let syntax = ps.find_syntax_by_extension(file.extension().unwrap()).unwrap();
-		let mut h = HighlightLines::new(syntax, &ts.themes["base16-ocean.dark"]);
+        let ps = SyntaxSet::load_defaults_newlines();
+        let ts = ThemeSet::load_defaults();
+
+        let mut h = file
+            .extension()
+            .and_then(|e| e.to_str())
+            .and_then(|e| ps.find_syntax_by_extension(e))
+            .map(|s| HighlightLines::new(s, &ts.themes["base16-ocean.dark"]));
 
         let (old_index, new_index) = self.starting_indexes();
 
-        println!("@@ {}", file.to_str().unwrap());
+        if let Some(file_str) = file.to_str() {
+            println!("@@ {file_str}");
+        }
 
         if let Some(old_index) = old_index {
             print!("@@ {old_index}");
