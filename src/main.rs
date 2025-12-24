@@ -49,9 +49,11 @@ impl Hunk {
             println!("{}{}", "@@ ".blue(), file_str.blue());
         }
 
-        if let Some(old_index) = old_index {
-            print!("{}{}", "@@".blue(), old_index.to_string().blue());
-        }
+        print!(
+            "{}{}",
+            "@@".blue(),
+            old_index.unwrap_or_default().to_string().blue()
+        );
         if let Some(new_index) = new_index {
             println!("{}{}", ",".blue(), new_index.to_string().blue());
         } else {
@@ -108,6 +110,7 @@ fn collect_files(root: &Path) -> HashMap<PathBuf, PathBuf> {
 fn patch_dirs(left: &Path, right: &Path) -> io::Result<()> {
     let left_files = collect_files(left);
     let right_files = collect_files(right);
+    let mut patch = true;
 
     // Files present in both → diff
     for rel_path in left_files.keys().filter(|p| right_files.contains_key(*p)) {
@@ -115,8 +118,15 @@ fn patch_dirs(left: &Path, right: &Path) -> io::Result<()> {
         let right_file = &right_files[rel_path];
 
         let original = fs::read_to_string(left_file)?;
+
         let dest = fs::read_to_string(right_file)?;
-        let (dest, _quit) = patch_file(right_file, &original, &dest)?;
+        let dest = if patch {
+            let (dest, quit) = patch_file(right_file, &original, &dest)?;
+            patch = !quit;
+            dest
+        } else {
+            dest
+        };
 
         let mut right_file = File::create(right_file)?;
         right_file.write_all(dest.as_bytes())?;
@@ -127,25 +137,38 @@ fn patch_dirs(left: &Path, right: &Path) -> io::Result<()> {
         let left_file = &left_files[rel_path];
         let original = fs::read_to_string(left_file)?;
 
-        print!("\n@@ delete {}\n@@:> ", left_file.to_str().unwrap());
-        io::stdout().flush()?;
+        if patch {
+            print!(
+                "{}",
+                format!("\n@@ delete {}\n@@:> ", left_file.to_str().unwrap()).blue()
+            );
+            io::stdout().flush()?;
 
-        let mut input = String::new();
-        io::stdin().read_line(&mut input)?;
-        match input.trim() {
-            "y" | "" => {}
-            "n" => {
-                let mut right_file = File::create(right.join(rel_path))?;
-                right_file.write_all(original.as_bytes())?;
-            }
-            "e" => {
-                let (dest, _quit) = patch_file(left_file, &original, "")?;
-                if !dest.is_empty() {
+            let mut input = String::new();
+            io::stdin().read_line(&mut input)?;
+            match input.trim() {
+                "y" | "" => {}
+                "n" => {
                     let mut right_file = File::create(right.join(rel_path))?;
-                    right_file.write_all(dest.as_bytes())?;
+                    right_file.write_all(original.as_bytes())?;
                 }
+                "q" => {
+                    let mut right_file = File::create(right.join(rel_path))?;
+                    right_file.write_all(original.as_bytes())?;
+                    patch = false;
+                }
+                "e" => {
+                    let (dest, _quit) = patch_file(left_file, &original, "")?;
+                    if !dest.is_empty() {
+                        let mut right_file = File::create(right.join(rel_path))?;
+                        right_file.write_all(dest.as_bytes())?;
+                    }
+                }
+                _ => println!("Unknown command"),
             }
-            _ => println!("Unknown command"),
+        } else {
+            let mut right_file = File::create(right.join(rel_path))?;
+            right_file.write_all(original.as_bytes())?;
         }
     }
 
@@ -153,24 +176,35 @@ fn patch_dirs(left: &Path, right: &Path) -> io::Result<()> {
     for rel_path in right_files.keys().filter(|p| !left_files.contains_key(*p)) {
         let right_file = &right_files[rel_path];
 
-        print!("\n@@ add {}\n@@:> ", right_file.to_str().unwrap());
-        io::stdout().flush()?;
+        if patch {
+            print!(
+                "{}",
+                format!("\n@@ add {}\n@@:> ", right_file.to_str().unwrap()).blue()
+            );
+            io::stdout().flush()?;
 
-        let mut input = String::new();
-        io::stdin().read_line(&mut input)?;
+            let mut input = String::new();
+            io::stdin().read_line(&mut input)?;
 
-        match input.trim() {
-            "y" | "" => {}
-            "n" => {
-                fs::remove_file(right_file)?;
+            match input.trim() {
+                "y" | "" => {}
+                "n" => {
+                    fs::remove_file(right_file)?;
+                }
+                "q" => {
+                    fs::remove_file(right_file)?;
+                    patch = false;
+                }
+                "e" => {
+                    let dest = fs::read_to_string(right_file)?;
+                    let (dest, _quit) = patch_file(right_file, "", &dest)?;
+                    let mut right_file = File::create(right_file)?;
+                    right_file.write_all(dest.as_bytes())?;
+                }
+                _ => println!("Unknown command"),
             }
-            "e" => {
-                let dest = fs::read_to_string(right_file)?;
-                let (dest, _quit) = patch_file(right_file, "", &dest)?;
-                let mut right_file = File::create(right_file)?;
-                right_file.write_all(dest.as_bytes())?;
-            }
-            _ => println!("Unknown command"),
+        } else {
+            fs::remove_file(right_file)?;
         }
     }
 
@@ -266,7 +300,13 @@ fn edit_hunk(original: &str, hunk: &Hunk) -> io::Result<Option<Hunk>> {
         let mut tmp = NamedTempFile::new()?;
 
         let (old_index, new_index) = hunk.starting_indexes();
-        writeln!(tmp, "@@ {old_index:?},{new_index:?}").unwrap();
+        write!(tmp, "@@ {}", old_index.unwrap_or_default())?;
+        if let Some(new_index) = new_index {
+            writeln!(tmp, ",{new_index}")?;
+        } else {
+            writeln!(tmp)?;
+        }
+
         for diff in &hunk.diffs {
             match diff.tag {
                 ChangeTag::Equal => write!(tmp, " {}", diff.line)?,
