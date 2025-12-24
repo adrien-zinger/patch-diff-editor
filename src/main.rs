@@ -82,7 +82,7 @@ impl Hunk {
 fn get_args() -> (String, String) {
     let args: Vec<String> = env::args().collect();
     if args.len() != 3 {
-        eprintln!("Usage: {} <file1> <file2>", args[0]);
+        eprintln!("Usage: {} <folder1> <folder2>", args[0]);
         std::process::exit(1);
     }
     (args[1].clone(), args[2].clone())
@@ -116,7 +116,7 @@ fn patch_dirs(left: &Path, right: &Path) -> io::Result<()> {
 
         let original = fs::read_to_string(left_file)?;
         let dest = fs::read_to_string(right_file)?;
-        let dest = patch_file(right_file, &original, &dest)?;
+        let (dest, _quit) = patch_file(right_file, &original, &dest)?;
 
         let mut right_file = File::create(right_file)?;
         right_file.write_all(dest.as_bytes())?;
@@ -139,7 +139,7 @@ fn patch_dirs(left: &Path, right: &Path) -> io::Result<()> {
                 right_file.write_all(original.as_bytes())?;
             }
             "e" => {
-                let dest = patch_file(left_file, &original, "")?;
+                let (dest, _quit) = patch_file(left_file, &original, "")?;
                 if !dest.is_empty() {
                     let mut right_file = File::create(right.join(rel_path))?;
                     right_file.write_all(dest.as_bytes())?;
@@ -166,7 +166,7 @@ fn patch_dirs(left: &Path, right: &Path) -> io::Result<()> {
             }
             "e" => {
                 let dest = fs::read_to_string(right_file)?;
-                let dest = patch_file(right_file, "", &dest)?;
+                let (dest, _quit) = patch_file(right_file, "", &dest)?;
                 let mut right_file = File::create(right_file)?;
                 right_file.write_all(dest.as_bytes())?;
             }
@@ -185,9 +185,9 @@ fn main() -> io::Result<()> {
     Ok(())
 }
 
-fn patch_file(path: &Path, original: &str, dest: &str) -> io::Result<String> {
+fn patch_file(path: &Path, original: &str, dest: &str) -> io::Result<(String, bool)> {
     let mut hunks = build_hunks(original, dest, 6);
-
+    let mut quit = false;
     let mut i = 0;
     while i < hunks.len() {
         hunks[i].print(path);
@@ -206,6 +206,17 @@ fn patch_file(path: &Path, original: &str, dest: &str) -> io::Result<String> {
                 hunks[i].apply = false;
                 i += 1;
             }
+            "d" => break,
+            "a" => {
+                while i < hunks.len() {
+                    hunks[i].apply = true;
+                    i += 1;
+                }
+                break;
+            }
+            "j" => {
+                i = i.saturating_sub(1);
+            }
             "e" => {
                 hunks[i] = edit_hunk(original, &hunks[i]).unwrap().unwrap();
             }
@@ -220,12 +231,34 @@ fn patch_file(path: &Path, original: &str, dest: &str) -> io::Result<String> {
                     println!("Hunk cannot be split further.");
                 }
             }
-            "q" => break,
+            "h" => print_help(),
+            "q" => {
+                quit = true;
+                break;
+            }
             _ => println!("Unknown command"),
         }
     }
 
-    Ok(apply(original, hunks))
+    Ok((apply(original, hunks), quit))
+}
+
+fn print_help() {
+    println!(
+        "\
+y - apply this hunk
+n - skip this hunk
+e - edit the current hunk manually
+s - split the current hunk into smaller hunks
+h - show this help
+q - quit; do not process any more hunks
+a - apply all nexts hunks for this file
+d - skip all nexts hunks for this file
+j - go to the previous hunk
+
+Press Enter is the same as 'y'.
+"
+    );
 }
 
 fn edit_hunk(original: &str, hunk: &Hunk) -> io::Result<Option<Hunk>> {
