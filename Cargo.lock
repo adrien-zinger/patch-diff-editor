@@ -73,17 +73,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "difftool"
-version = "0.1.0"
-dependencies = [
- "colored",
- "similar",
- "syntect",
- "tempfile",
- "walkdir",
-]
-
-[[package]]
 name = "equivalent"
 version = "1.0.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -227,6 +216,17 @@ checksum = "c7f86c6eef3d6df15f23bcfb6af487cbd2fed4e5581d58d5bf1f5f8b7f6727dc"
 dependencies = [
  "cc",
  "pkg-config",
+]
+
+[[package]]
+name = "patch-diff-editor"
+version = "0.1.0"
+dependencies = [
+ "colored",
+ "similar",
+ "syntect",
+ "tempfile",
+ "walkdir",
 ]
 
 [[package]]
