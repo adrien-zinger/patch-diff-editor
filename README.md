@@ -3,11 +3,20 @@
 Tool to mimic the behavior of `git add -p` or any git commands with `--patch`.
 This editor can be used as `jujutsu` diff editor.
 
+This program compare a `left` directory to a `right` directory and edit the
+diffs, applying directly into `right` the selected hunks. So `right` is
+modified.
+
+## Usage
+
+Modify the jj configuration.
+
 ```yaml
+[ui]
 diff-editor = "/<path>/patch-diff-editor"
 ```
 
-## Usage
+The program works as follow.
 
 ```bash
 patch-diff-editor <left> <right>
