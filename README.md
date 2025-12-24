@@ -27,3 +27,22 @@ patch-diff-editor <left> <right>
 For now, the configuration accept:
 
 - `DPE_EDITOR`: program to launch to edit hunks (fallback `EDITOR`)
+
+## Cli
+
+User inputs
+
+```bash
+@@:> h
+y - apply this hunk
+n - skip this hunk
+e - edit the current hunk manually
+s - split the current hunk into smaller hunks
+h - show this help
+q - quit; do not process any more hunks
+a - apply all nexts hunks for this file
+d - skip all nexts hunks for this file
+j - go to the previous hunk
+
+Press Enter is the same as 'y'.
+```
