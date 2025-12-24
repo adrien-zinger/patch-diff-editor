@@ -12,3 +12,9 @@ diff-editor = "/<path>/patch-diff-editor"
 ```bash
 patch-diff-editor <left> <right>
 ```
+
+## Env var
+
+For now, the configuration accept:
+
+- `DPE_EDITOR`: program to launch to edit hunks (fallback `EDITOR`)

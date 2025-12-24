@@ -27,6 +27,15 @@ struct Diff {
     tag: ChangeTag,
 }
 
+fn get_editor() -> Result<String, env::VarError> {
+    let ret = env::var("PDE_EDITOR");
+    if ret.is_ok() {
+        return ret;
+    }
+
+    env::var("EDITOR")
+}
+
 impl Hunk {
     fn starting_indexes(&self) -> (Option<usize>, Option<usize>) {
         let start = &self.diffs[0];
@@ -252,7 +261,11 @@ fn patch_file(path: &Path, original: &str, dest: &str) -> io::Result<(String, bo
                 i = i.saturating_sub(1);
             }
             "e" => {
-                hunks[i] = edit_hunk(original, &hunks[i]).unwrap().unwrap();
+                if let Some(edited) = edit_hunk(original, &hunks[i]).ok().and_then(|hunk| hunk) {
+                    hunks[i] = edited;
+                } else {
+                    println!("Failed to edit hunk.");
+                }
             }
             "s" => {
                 let split = split_hunk(&hunks[i]);
@@ -315,7 +328,12 @@ fn edit_hunk(original: &str, hunk: &Hunk) -> io::Result<Option<Hunk>> {
             }
         }
 
-        Command::new("vim").arg(tmp.path()).status()?;
+        let Ok(editor) = get_editor() else {
+            eprintln!("\nNo text editor found…");
+            return Err(std::io::Error::other("editor undefined"));
+        };
+
+        Command::new(editor).arg(tmp.path()).status()?;
 
         let mut edited = String::new();
         tmp.reopen()?.read_to_string(&mut edited)?;
